@@ -80,9 +80,10 @@ pub const Rope = struct {
     }
 
     pub fn insert_before(self: *Rope, allocator: Allocator, cursor: usize, text: []u8) !void {
-        if (text.len == 0 or cursor + text.len > self.getLength()) {
+        if (text.len == 0 or cursor > self.getLength()) {
             std.debug.print("{d} == 0: {}\n", .{ text.len, text.len == 0 });
             std.debug.print("{d} + {d} > {d}: {}\n", .{ cursor, text.len, self.getLength(), cursor + text.len > self.getLength() });
+            std.debug.print("Node: {s}\n", .{ try self.combine(allocator) });
 
             return error.IndexOutOfRange;
         }
@@ -103,22 +104,10 @@ pub const Rope = struct {
                 allocator.destroy(new_leaf);
             },
             .internal => |*internal| {
-                if (cursor + text.len <= internal.length) {
+                if (cursor <= internal.length) {
                     try internal.left.insert_before(allocator, cursor, text);
-                } else if (cursor >= internal.length) {
-                    try internal.right.insert_before(allocator, cursor, text);
                 } else {
-                    const left = try internal.left.substring(allocator, internal.left.getLength(), cursor);
-                    const right = try internal.right.substring(allocator, cursor - internal.length, text.len - internal.length);
-                    const new = try Rope.initLeaf(allocator, text);
-
-                    const new_left = try Rope.concat(allocator, left, new);
-                    const new_internal = try Rope.concat(allocator, new_left, right);
-
-                    switch (new_internal.node) {
-                        .leaf => return error.WrongNodeType,
-                        .internal => |node| internal.* = node,
-                    }
+                    try internal.right.insert_before(allocator, cursor - internal.left.getLength(), text);
                 }
             },
         }

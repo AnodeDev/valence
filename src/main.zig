@@ -33,7 +33,7 @@ pub fn main() !void {
     try substring.print(allocator);
     std.debug.print("\n\n", .{});
 
-    try final.insert_before(allocator, 5, @constCast("b"[0..]));
+    try final.insert_before(allocator, 17, @constCast("J. "[0..]));
     std.debug.print("Content updated({d}):\n", .{ final.getLength() });
     try final.print(allocator);
     std.debug.print("\n\n", .{});
