@@ -6,7 +6,6 @@ const Rope = ropeStructure.Rope;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
-    std.debug.print("VALENCE!", .{});
 }
 
 test "initLeaf initializes with correct content and length" {
@@ -43,14 +42,37 @@ test "insertBefore inserts at the correct position" {
     const rope = try Rope.initLeaf(allocator, "abcd");
     defer rope.deinit(allocator);
 
-    try rope.insertBefore(allocator, 2, "xyz");
+    try rope.insertBefore(allocator, 2, 'x');
 
-    try std.testing.expectEqual(@as(usize, 7), rope.getLength());
+    try std.testing.expectEqual(@as(usize, 5), rope.getLength());
 
     const slice = try rope.flatten(allocator);
     defer allocator.free(slice);
 
-    try std.testing.expectEqualStrings("abxyzcd", slice);
+    try std.testing.expectEqualStrings("abxcd", slice);
+}
+
+test "Buffer insert and delete" {
+    const allocator = std.testing.allocator;
+    var testBuffer = try buffer.Buffer.init(allocator);
+    defer testBuffer.deinit(allocator);
+
+    try testBuffer.insertBefore(allocator, 'H');
+    try testBuffer.insertBefore(allocator, 'e');
+    try testBuffer.insertBefore(allocator, 'l');
+    try testBuffer.insertBefore(allocator, 'l');
+    try testBuffer.insertBefore(allocator, 'l');
+    try testBuffer.insertBefore(allocator, 'o');
+
+    testBuffer.moveCursorBackward();
+    try testBuffer.deleteBefore(allocator);
+
+    try std.testing.expectEqual(@as(usize, 5), testBuffer.content.getLength());
+
+    const slice = try testBuffer.content.flatten(allocator);
+    defer allocator.free(slice);
+
+    try std.testing.expectEqualStrings("Hello", slice);
 }
 
 // TODO:
