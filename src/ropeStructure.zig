@@ -21,8 +21,6 @@ pub const Rope = struct {
     const Branch = struct {
         left: *Rope,
         right: *Rope,
-        leftLength: usize,
-        rightLength: usize,
     };
 
     // Rope field
@@ -48,7 +46,7 @@ pub const Rope = struct {
     pub fn getLength(self: *const Rope) usize {
         return switch (self.node) {
             .leaf => |leaf| leaf.text.len,
-            .branch => |branch| branch.leftLength + branch.rightLength,
+            .branch => |branch| branch.left.getLength() + branch.right.getLength(),
         };
     }
 
@@ -61,8 +59,6 @@ pub const Rope = struct {
                 .branch = .{
                     .left = left,
                     .right = right,
-                    .leftLength = left.getLength(),
-                    .rightLength = right.getLength(),
                 },
             },
         };
@@ -77,13 +73,13 @@ pub const Rope = struct {
         switch (self.node) {
             .leaf => |leaf| return Rope.initLeaf(allocator, leaf.text[start..end]),
             .branch => |branch| {
-                if (end <= branch.leftLength) {
+                if (end <= branch.left.getLength()) {
                     return branch.left.substring(allocator, start, end);
-                } else if (start >= branch.leftLength) {
-                    return branch.right.substring(allocator, start - branch.leftLength, end - branch.leftLength);
+                } else if (start >= branch.left.getLength()) {
+                    return branch.right.substring(allocator, start - branch.left.getLength(), end - branch.left.getLength());
                 } else {
-                    const left_sub = try branch.left.substring(allocator, start, branch.leftLength);
-                    const right_sub = try branch.right.substring(allocator, 0, end - branch.leftLength);
+                    const left_sub = try branch.left.substring(allocator, start, branch.left.getLength());
+                    const right_sub = try branch.right.substring(allocator, 0, end - branch.left.Length());
 
                     return concat(allocator, left_sub, right_sub);
                 }
@@ -91,34 +87,65 @@ pub const Rope = struct {
         }
     }
 
-    pub fn insertBefore(self: *Rope, allocator: Allocator, cursor: usize, text: []const u8) !void {
-        if (text.len == 0 or cursor > self.getLength()) return error.IndexOutOfRange;
+    pub fn insertBefore(self: *Rope, allocator: Allocator, cursor: usize, char: u8) !void {
+        if (cursor > self.getLength()) return error.IndexOutOfRange;
 
         switch (self.node) {
             .leaf => |*leaf| {
-                // Has to divide the leaf in order to insert the new text
-                const left = try Rope.initLeaf(allocator, leaf.*.text[0..cursor]);
-                const right = try Rope.initLeaf(allocator, leaf.*.text[cursor..]);
-                const new = try Rope.initLeaf(allocator, text);
+                if (cursor <= leaf.text.len) {
+                    // Has to divide the leaf in order to insert the new text
+                    const left = leaf.*.text[0..cursor];
+                    const right = leaf.*.text[cursor..];
+                    const text_size = leaf.text.len + 1;
+                    var new_text = try allocator.alloc(u8, text_size);
 
-                const new_left = try Rope.concat(allocator, left, new);
-                const new_leaf = try Rope.concat(allocator, new_left, right);
+                    @memcpy(new_text[0..left.len], left);
+                    @memcpy(new_text[left.len + 1..], right);
+                    new_text[left.len] = char;
 
-                allocator.free(leaf.text);
-                leaf.text = try new_leaf.flatten(allocator);
-
-                new_leaf.deinit(allocator);
+                    allocator.free(leaf.text);
+                    leaf.text = new_text;
+                }
             },
             .branch => |*branch| {
-                if (cursor <= branch.leftLength) {
-                    try branch.left.insertBefore(allocator, cursor, text);
+                if (cursor <= branch.left.getLength()) {
+                    try branch.left.insertBefore(allocator, cursor, char);
                 } else {
-                    try branch.right.insertBefore(allocator, cursor - branch.leftLength, text);
+                    try branch.right.insertBefore(allocator, cursor - branch.left.getLength(), char);
                 }
             },
         }
     }
 
+    pub fn deleteBefore(self: *Rope, allocator: Allocator, cursor: usize) !void {
+        if (cursor > self.getLength()) return error.IndexOutOfRange;
+
+        switch (self.node) {
+            .leaf => |*leaf| {
+                if (leaf.text.len > 0 and cursor > 0) {
+                    const left = leaf.*.text[0..cursor - 1];
+                    const right = leaf.*.text[cursor..];
+                    const text_size = leaf.text.len - 1;
+                    var new_text = try allocator.alloc(u8, text_size);
+
+                    @memcpy(new_text[0..left.len], left);
+                    @memcpy(new_text[left.len..], right);
+
+                    allocator.free(leaf.text);
+                    leaf.text = new_text;
+                }
+            },
+            .branch => |*branch| {
+                if (cursor <= branch.left.getLength()) {
+                    try branch.left.deleteBefore(allocator, cursor);
+                } else {
+                    try branch.right.deleteBefore(allocator, cursor - branch.left.getLength());
+                }
+            },
+        }
+    }
+
+    // Shifts the leaves around to make them an equal size.
     pub fn balance(self: *Rope, allocator: Allocator) !void {
         const buffer = try self.flatten(allocator);
         defer allocator.free(buffer);
@@ -144,6 +171,7 @@ pub const Rope = struct {
         allocator.destroy(balanced);
     }
 
+    // Creates a new Rope with balanced nodes.
     fn buildBalancedRope(allocator: Allocator, nodes: []*Rope) !*Rope {
         if (nodes.len == 1) return nodes[0];
 
@@ -175,7 +203,8 @@ pub const Rope = struct {
         return result;
     }
 
-    // Copies the whole Rope into a u8 slice
+    // Copies the Rope into a u8 slice
+    // The offset sets how far from the start of the Rope to start
     // TODO: Optimize to only copy relevant parts of the Rope
     fn copyInto(self: *const Rope, buffer: []u8, offset: *usize) !void {
         switch (self.node) {
@@ -204,7 +233,7 @@ pub const Rope = struct {
         switch (self.node) {
             .leaf => |leaf| try writer.print("Leaf: \"{s}\"\n", .{ leaf.text }),
             .branch => |branch| {
-                try writer.print("branch({d})\n", .{ branch.leftLength + branch.rightLength });
+                try writer.print("branch({d})\n", .{ branch.left.getLength() + branch.right.getLength() });
                 try branch.left.tree(writer, depth + 1);
                 try branch.right.tree(writer, depth + 1);
             },
