@@ -1,42 +1,56 @@
 const std = @import("std");
-const rope = @import("rope.zig");
+const ropeStructure = @import("ropeStructure.zig");
+const buffer = @import("buffer.zig");
 
-const Rope = rope.Rope;
+const Rope = ropeStructure.Rope;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    const stdout = std.io.getStdOut().writer();
+    std.debug.print("VALENCE!", .{});
+}
 
-    const hello = try Rope.initLeaf(allocator, @constCast("Hello "[0..]));
-    const my = try Rope.initLeaf(allocator, @constCast("my "[0..]));
-    const hello_my = try Rope.concat(allocator, hello, my);
-    const name = try Rope.initLeaf(allocator, @constCast("name "[0..]));
-    const is = try Rope.initLeaf(allocator, @constCast("is "[0..]));
-    const name_is = try Rope.concat(allocator, name, is);
-    const dexter = try Rope.initLeaf(allocator, @constCast("Dexter"[0..]));
-    const name_is_dexter = try Rope.concat(allocator, name_is, dexter);
+test "initLeaf initializes with correct content and length" {
+    const allocator = std.testing.allocator;
+    const rope = try Rope.initLeaf(allocator, @constCast("test"[0..]));
+    defer rope.deinit(allocator);
 
-    const final = try Rope.concat(allocator, hello_my, name_is_dexter);
+    try std.testing.expectEqual(@as(usize, 4), rope.getLength());
 
-    std.debug.print("Content({d}):\n", .{ final.getLength() });
-    try final.print(allocator);
-    std.debug.print("\n\n", .{});
+    const slice = try rope.flatten(allocator);
+    defer allocator.free(slice);
 
-    std.debug.print("\nNodes:\n", .{});
-    try final.tree(stdout, 0);
-    std.debug.print("\n\n", .{});
+    try std.testing.expectEqualStrings("test", slice);
+}
 
-    const substring = try final.substring(allocator, 6, 13);
-    std.debug.print("Substring(6, 13): ", .{});
-    try substring.print(allocator);
-    std.debug.print("\n\n", .{});
+test "concat combines two ropes correctly" {
+    const allocator = std.testing.allocator;
+    const rope1 = try Rope.initLeaf(allocator, "Hello ");
+    const rope2 = try Rope.initLeaf(allocator, "World!");
 
-    try final.insert_before(allocator, 17, @constCast("J. "[0..]));
-    std.debug.print("Content updated({d}):\n", .{ final.getLength() });
-    try final.print(allocator);
-    std.debug.print("\n\n", .{});
+    const rope = try Rope.concat(allocator, rope1, rope2);
+    defer rope.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 12), rope.getLength());
+
+    const slice = try rope.flatten(allocator);
+    defer allocator.free(slice);
+
+    try std.testing.expectEqualStrings("Hello World!", slice);
+}
+
+test "insertBefore inserts at the correct position" {
+    const allocator = std.testing.allocator;
+    const rope = try Rope.initLeaf(allocator, "abcd");
+    defer rope.deinit(allocator);
+
+    try rope.insertBefore(allocator, 2, "xyz");
+
+    try std.testing.expectEqual(@as(usize, 7), rope.getLength());
+
+    const slice = try rope.flatten(allocator);
+    defer allocator.free(slice);
+
+    try std.testing.expectEqualStrings("abxyzcd", slice);
 }
 
 // TODO:
