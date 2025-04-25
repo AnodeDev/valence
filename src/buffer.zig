@@ -17,6 +17,15 @@ pub const Buffer = struct {
         };
     }
 
+    pub fn initScratch(allocator: Allocator) !Buffer {
+        var buffer = try Buffer.init(allocator);
+
+        try buffer.insertLine(allocator, "This is a scratch buffer. It's a sandbox without a path to test stuff out.\n");
+        try buffer.insertLine(allocator, "It will be used to allow testing config options and plugins in the future.\n");
+
+        return buffer;
+    }
+
     pub fn moveCursorForward(self: *Buffer) void {
         if (self.cursor < self.content.getLength() - 1) {
             self.cursor += 1;
@@ -38,6 +47,11 @@ pub const Buffer = struct {
     pub fn insertBefore(self: *Buffer, allocator: Allocator, input: u8) !void {
         try self.content.insertBefore(allocator, self.cursor, input);
         self.cursor += 1;
+    }
+
+    pub fn insertLine(self: *Buffer, allocator: Allocator, line: []const u8) !void {
+        try self.content.insertLine(allocator, self.cursor, line);
+        self.cursor += line.len;
     }
 
     pub fn deleteBefore(self: *Buffer, allocator: Allocator) !void {

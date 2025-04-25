@@ -1,11 +1,23 @@
 const std = @import("std");
-const ropeStructure = @import("ropeStructure.zig");
-const buffer = @import("buffer.zig");
+const rope_structure_mod = @import("ropeStructure.zig");
+const buffer_mod = @import("buffer.zig");
+const buffer_manager_mod = @import("bufferManager.zig");
 
-const Rope = ropeStructure.Rope;
+const Rope = rope_structure_mod.Rope;
+const Buffer = buffer_mod.Buffer;
+const BufferManager = buffer_manager_mod.BufferManager;
 const Allocator = std.mem.Allocator;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    const manager = try BufferManager.init(allocator);
+    defer manager.deinit(allocator);
+    const stdout = std.io.getStdOut().writer();
+
+    const buffer = manager.getActiveBuffer();
+
+    try buffer.content.tree(stdout, 0);
 }
 
 test "initLeaf initializes with correct content and length" {
@@ -54,7 +66,7 @@ test "insertBefore inserts at the correct position" {
 
 test "Buffer insert and delete" {
     const allocator = std.testing.allocator;
-    var testBuffer = try buffer.Buffer.init(allocator);
+    var testBuffer = try Buffer.init(allocator);
     defer testBuffer.deinit(allocator);
 
     try testBuffer.insertBefore(allocator, 'H');
@@ -76,7 +88,6 @@ test "Buffer insert and delete" {
 }
 
 // TODO:
-//  - Implement rope.
 //  - Implement Buffer struct + BufferHandler struct.
 //  - File loading.
 //

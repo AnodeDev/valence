@@ -117,6 +117,36 @@ pub const Rope = struct {
         }
     }
 
+    pub fn insertLine(self: *Rope, allocator: Allocator, cursor: usize, line: []const u8) !void {
+        if (cursor > self.getLength()) return error.IndexOutOfRange;
+
+        switch (self.node) {
+            .leaf => |*leaf| {
+                if (cursor <= leaf.text.len) {
+                    const left = leaf.*.text[0..cursor];
+                    const right = leaf.*.text[cursor..];
+                    const text_size = leaf.text.len + line.len;
+                    var new_text = try allocator.alloc(u8, text_size);
+
+                    @memcpy(new_text[0..left.len], left);
+                    @memcpy(new_text[left.len + line.len..], right);
+                    @memcpy(new_text[left.len..left.len + line.len], line);
+
+                    allocator.free(leaf.text);
+                    leaf.text = new_text;
+                }
+            },
+            .branch => |*branch| {
+                if (cursor <= branch.left.getLength()) {
+                    try branch.left.insertLine(allocator, cursor, line);
+                }
+                else {
+                    try branch.left.insertLine(allocator, cursor - branch.left.getLength(), line);
+                }
+            },
+        }
+    }
+
     pub fn deleteBefore(self: *Rope, allocator: Allocator, cursor: usize) !void {
         if (cursor > self.getLength()) return error.IndexOutOfRange;
 
